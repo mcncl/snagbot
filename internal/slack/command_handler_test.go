@@ -4,16 +4,15 @@ import (
 	"testing"
 
 	"github.com/mcncl/snagbot/internal/config"
-	"github.com/mcncl/snagbot/pkg/models"
 	"github.com/stretchr/testify/assert"
 )
 
 // TestHandleConfigCommand tests the command handler logic
 func TestHandleConfigCommand(t *testing.T) {
 	// Store the original channelConfigs map
-	originalConfigs := channelConfigs
+	originalStore := globalConfigStore
 	// Restore it after the test
-	defer func() { channelConfigs = originalConfigs }()
+	defer func() { globalConfigStore = originalStore }()
 
 	tests := []struct {
 		name              string
@@ -69,11 +68,12 @@ func TestHandleConfigCommand(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// Reset channelConfigs for each test
-			channelConfigs = make(map[string]*models.ChannelConfig)
+			// Create a fresh config store for each test
+			configStore := NewInMemoryConfigStoreWithConfig(nil)
+			globalConfigStore = configStore
 
 			// Process the command
-			response := handleConfigCommand(test.commandText, test.channelID)
+			response := handleConfigCommand(configStore, test.commandText, test.channelID)
 
 			// Check if response indicates success or failure
 			if test.expectedSuccess {
@@ -82,8 +82,7 @@ func TestHandleConfigCommand(t *testing.T) {
 				assert.Contains(t, response, "at $")
 
 				// Verify the channel config was updated correctly
-				config, exists := channelConfigs[test.channelID]
-				assert.True(t, exists)
+				config := configStore.GetConfig(test.channelID)
 				assert.Equal(t, test.expectedItemName, config.ItemName)
 				assert.Equal(t, test.expectedItemPrice, config.ItemPrice)
 			} else {
@@ -123,7 +122,7 @@ func TestHandleConfigCommandWithService(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Setup test dependencies
-			configStore := NewInMemoryConfigStore()
+			configStore := NewInMemoryConfigStoreWithConfig(nil)
 			mockAPI := NewMockSlackAPI()
 			cfg := &config.Config{
 				DefaultItemName:  "Bunnings snags",
@@ -148,4 +147,31 @@ func TestHandleConfigCommandWithService(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestLegacyCompatibility tests the backward compatibility functions
+func TestLegacyCompatibility(t *testing.T) {
+	// Store the original channelConfigs map
+	originalStore := globalConfigStore
+	// Restore it after the test
+	defer func() { globalConfigStore = originalStore }()
+
+	// Create a fresh config store
+	configStore := NewInMemoryConfigStoreWithConfig(nil)
+	globalConfigStore = configStore
+
+	// Test the legacy function
+	channelID := "C12345"
+	commandText := "item \"coffee\" price 5.00"
+
+	response := handleConfigCommandLegacy(commandText, channelID)
+
+	// Verify the response
+	assert.Contains(t, response, "Configuration updated!")
+	assert.Contains(t, response, "coffee")
+
+	// Verify the config was updated
+	config := configStore.GetConfig(channelID)
+	assert.Equal(t, "coffee", config.ItemName)
+	assert.Equal(t, 5.00, config.ItemPrice)
 }

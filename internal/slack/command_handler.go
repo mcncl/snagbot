@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/mcncl/snagbot/internal/config"
 	"github.com/slack-go/slack"
@@ -11,6 +12,9 @@ import (
 
 // CommandHandler creates a handler for Slack slash commands
 func CommandHandler(cfg *config.Config) http.HandlerFunc {
+	// Create a single instance of the config store for all requests
+	configStore := NewInMemoryConfigStoreWithConfig(cfg)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Verify the request is coming from Slack
 		sv, err := slack.NewSecretsVerifier(r.Header, cfg.SlackSigningSecret)
@@ -53,8 +57,15 @@ func CommandHandler(cfg *config.Config) http.HandlerFunc {
 			return
 		}
 
-		// Parse the configuration command
-		response := handleConfigCommand(text, channelID)
+		// Handle different subcommands
+		response := ""
+		if strings.TrimSpace(strings.ToLower(text)) == "reset" {
+			response = handleResetCommand(configStore, channelID)
+		} else if strings.TrimSpace(strings.ToLower(text)) == "status" {
+			response = handleStatusCommand(configStore, channelID)
+		} else {
+			response = handleConfigCommand(configStore, text, channelID)
+		}
 
 		// Return the response immediately with 200 OK
 		w.Header().Set("Content-Type", "application/json")
@@ -64,7 +75,7 @@ func CommandHandler(cfg *config.Config) http.HandlerFunc {
 }
 
 // handleConfigCommand processes the command text and updates the channel configuration
-func handleConfigCommand(text, channelID string) string {
+func handleConfigCommand(store ChannelConfigStore, text, channelID string) string {
 	// Parse the command
 	result, err := ParseConfigCommand(text)
 	if err != nil {
@@ -73,7 +84,7 @@ func handleConfigCommand(text, channelID string) string {
 	}
 
 	// Update the channel configuration
-	err = UpdateChannelConfig(channelID, result.ItemName, result.ItemPrice)
+	err = store.UpdateConfig(channelID, result.ItemName, result.ItemPrice)
 	if err != nil {
 		log.Printf("Error updating channel config: %v", err)
 		return fmt.Sprintf("Error updating configuration: %v", err)
@@ -83,7 +94,42 @@ func handleConfigCommand(text, channelID string) string {
 	return FormatCommandResponse(result)
 }
 
-// handleConfigCommandWithService uses the service pattern for processing commands
+// Backward compatibility function for existing code
+func handleConfigCommandLegacy(text, channelID string) string {
+	return handleConfigCommand(globalConfigStore, text, channelID)
+}
+
+// handleResetCommand resets a channel's configuration to the default
+func handleResetCommand(store ChannelConfigStore, channelID string) string {
+	// Reset the config
+	err := store.ResetConfig(channelID)
+	if err != nil {
+		log.Printf("Error resetting channel config: %v", err)
+		return fmt.Sprintf("Error resetting configuration: %v", err)
+	}
+
+	// Get default config after reset
+	defaultConfig := store.GetConfig(channelID)
+
+	return fmt.Sprintf("Configuration has been reset! Now using the default item: %s (at $%.2f each).",
+		defaultConfig.ItemName, defaultConfig.ItemPrice)
+}
+
+// handleStatusCommand returns the current configuration for a channel
+func handleStatusCommand(store ChannelConfigStore, channelID string) string {
+	config := store.GetConfig(channelID)
+
+	// Check if this is a custom or default config
+	if checker, ok := store.(ConfigExistsChecker); ok && !checker.ConfigExists(channelID) {
+		return fmt.Sprintf("This channel is using the default configuration: %s (at $%.2f each).",
+			config.ItemName, config.ItemPrice)
+	}
+
+	return fmt.Sprintf("Current configuration: %s (at $%.2f each).",
+		config.ItemName, config.ItemPrice)
+}
+
+// handleConfigCommandWithService is the implementation for the service pattern
 func handleConfigCommandWithService(text, channelID string, service *SlackService) string {
 	// Parse the command
 	result, err := ParseConfigCommand(text)
