@@ -2,7 +2,6 @@ package slack
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -13,10 +12,6 @@ import (
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 )
-
-// In-memory storage for channel configurations
-// In a production environment, this would be replaced with a persistent database
-var channelConfigs = make(map[string]*models.ChannelConfig)
 
 // EventHandler creates a handler for Slack events
 func EventHandler(cfg *config.Config) http.HandlerFunc {
@@ -92,23 +87,23 @@ func handleCallbackEvent(event slackevents.EventsAPIEvent, cfg *config.Config) {
 	// Check if it's a message event
 	switch ev := innerEvent.Data.(type) {
 	case *slackevents.MessageEvent:
-		// Skip bot messages to prevent loops
-		if ev.BotID != "" || ev.SubType == "bot_message" {
-			return
-		}
-
-		// Skip message changes/edits for now (can be implemented later)
-		if ev.SubType == "message_changed" {
-			return
-		}
-
-		// Process the message
-		processMessageEvent(ev, cfg)
+		// Process the message using our new function
+		ProcessMessageEvent(ev, cfg)
 	}
 }
 
-// processMessageEvent handles message events and sends responses
-func processMessageEvent(ev *slackevents.MessageEvent, cfg *config.Config) {
+// ProcessMessageEvent is the implementation that integrates with the real Slack events handler
+func ProcessMessageEvent(ev *slackevents.MessageEvent, cfg *config.Config) {
+	// Skip bot messages to prevent loops
+	if ev.BotID != "" || ev.SubType == "bot_message" {
+		return
+	}
+
+	// Skip message changes/edits for now (can be implemented later)
+	if ev.SubType == "message_changed" {
+		return
+	}
+
 	// Detect dollar values and calculate conversions
 	dollarValues := calculator.ExtractDollarValues(ev.Text)
 	if len(dollarValues) == 0 {
@@ -118,8 +113,13 @@ func processMessageEvent(ev *slackevents.MessageEvent, cfg *config.Config) {
 	// Calculate total
 	total := calculator.SumDollarValues(dollarValues)
 
-	// Get channel configuration
-	channelConfig := getChannelConfig(ev.Channel, cfg)
+	// Get or create channel configuration using our existing in-memory store
+	// In production, this would use a database-backed store
+	channelConfig, ok := channelConfigs[ev.Channel]
+	if !ok {
+		channelConfig = models.NewChannelConfig(ev.Channel)
+		channelConfigs[ev.Channel] = channelConfig
+	}
 
 	// Calculate number of items
 	count := calculator.CalculateItemCount(total, channelConfig.ItemPrice)
@@ -127,8 +127,10 @@ func processMessageEvent(ev *slackevents.MessageEvent, cfg *config.Config) {
 	// Format response message
 	message := calculator.FormatResponse(count, channelConfig.ItemName)
 
-	// Send response as a thread
+	// Create Slack API client
 	api := slack.New(cfg.SlackBotToken)
+
+	// Send response as a thread
 	_, _, err := api.PostMessage(
 		ev.Channel,
 		slack.MsgOptionText(message, false),
@@ -142,36 +144,50 @@ func processMessageEvent(ev *slackevents.MessageEvent, cfg *config.Config) {
 	}
 }
 
-// getChannelConfig retrieves the channel configuration or creates a default one
-func getChannelConfig(channelID string, cfg *config.Config) *models.ChannelConfig {
-	// Check if we have a config for this channel
-	if config, ok := channelConfigs[channelID]; ok {
-		return config
+// EventHandlerWithService creates an HTTP handler for Slack events using our service
+func EventHandlerWithService(service *SlackService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// This is a placeholder showing how it would be structured
+		// For a full service-based architecture implementation
 	}
-
-	// Create new default config
-	newConfig := models.NewChannelConfig(channelID)
-	channelConfigs[channelID] = newConfig
-	return newConfig
 }
 
-// UpdateChannelConfig updates the configuration for a channel
-func UpdateChannelConfig(channelID, itemName string, itemPrice float64) error {
-	if itemPrice <= 0 {
-		return fmt.Errorf("item price must be greater than zero")
+// HandleMessageEvent processes a Slack message event
+func (s *SlackService) HandleMessageEvent(ev *slackevents.MessageEvent) error {
+	// Skip bot messages to prevent loops
+	if ev.BotID != "" || ev.SubType == "bot_message" {
+		return nil
 	}
 
-	// Get or create channel config
-	config, ok := channelConfigs[channelID]
-	if !ok {
-		config = models.NewChannelConfig(channelID)
-		channelConfigs[channelID] = config
+	// Skip message changes/edits for now (can be implemented later)
+	if ev.SubType == "message_changed" {
+		return nil
 	}
 
-	// Update the configuration
-	config.SetItem(itemName, itemPrice)
-	log.Printf("Updated configuration for channel %s: item=%s, price=%0.2f",
-		channelID, itemName, itemPrice)
+	// Detect dollar values and calculate conversions
+	dollarValues := calculator.ExtractDollarValues(ev.Text)
+	if len(dollarValues) == 0 {
+		return nil // No dollar values found, nothing to do
+	}
 
-	return nil
+	// Calculate total
+	total := calculator.SumDollarValues(dollarValues)
+
+	// Get channel configuration
+	channelConfig := s.configStore.GetConfig(ev.Channel)
+
+	// Calculate number of items
+	count := calculator.CalculateItemCount(total, channelConfig.ItemPrice)
+
+	// Format response message
+	message := calculator.FormatResponse(count, channelConfig.ItemName)
+
+	// Send response
+	response := SlackResponse{
+		ChannelID: ev.Channel,
+		Text:      message,
+		ThreadTS:  ev.TimeStamp, // Reply in thread
+	}
+
+	return s.slackAPI.PostMessage(response)
 }

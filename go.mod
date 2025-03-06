@@ -1,6 +1,6 @@
 module github.com/mcncl/snagbot
 
-go 1.24.1
+go 1.23
 
 require (
 	github.com/slack-go/slack v0.16.0
