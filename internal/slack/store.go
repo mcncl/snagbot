@@ -20,8 +20,8 @@ type ChannelConfigStore interface {
 // InMemoryConfigStore provides a simple in-memory implementation of ChannelConfigStore
 type InMemoryConfigStore struct {
 	configs map[string]*models.ChannelConfig
-	mutex   sync.RWMutex   // Adding a mutex for thread safety
-	cfg     *config.Config // Application default config for fallback values
+	mutex   sync.RWMutex
+	cfg     *config.Config
 }
 
 // NewInMemoryConfigStore creates a new in-memory config store

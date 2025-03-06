@@ -34,7 +34,7 @@ func TestChannelConfigWithMessageHandling(t *testing.T) {
 			channelID:       "C12345",
 			setupFunc:       nil, // No special setup needed for default
 			messageText:     "This costs $35",
-			expectedMessage: "That's nearly 10 Bunnings snags!",
+			expectedMessage: "That's 10 Bunnings snags!",
 			shouldRespond:   true,
 		},
 		{
@@ -44,7 +44,7 @@ func TestChannelConfigWithMessageHandling(t *testing.T) {
 				configStore.UpdateConfig("C67890", "coffee", 5.00)
 			},
 			messageText:     "This costs $35",
-			expectedMessage: "That's nearly 7 coffees!",
+			expectedMessage: "That's 7 coffees!",
 			shouldRespond:   true,
 		},
 		{
@@ -57,7 +57,7 @@ func TestChannelConfigWithMessageHandling(t *testing.T) {
 				configStore.ResetConfig("C13579")
 			},
 			messageText:     "This costs $35",
-			expectedMessage: "That's nearly 10 Bunnings snags!", // Back to default
+			expectedMessage: "That's 10 Bunnings snags!",
 			shouldRespond:   true,
 		},
 		{

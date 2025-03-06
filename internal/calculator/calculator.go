@@ -65,18 +65,24 @@ func CalculateItemCount(total float64, pricePerItem float64) int {
 }
 
 // FormatResponse creates a fun response message with the item count
-// Handles pluralization automatically
-func FormatResponse(count int, itemName string) string {
-	// Handle zero case
+// Handles pluralization automatically and only uses "nearly" for non-exact conversions
+func FormatResponse(count int, itemName string, isExactDivision bool) string {
+	// Handle zero case (when the amount is too small to buy even one item)
 	if count <= 0 {
 		return "That wouldn't even buy a single " + getSingularForm(itemName) + "!"
 	}
 
+	// Format the beginning of the response based on whether it's an exact division
+	prefix := "That's "
+	if !isExactDivision {
+		prefix = "That's nearly "
+	}
+
 	// Handle pluralization
 	if count == 1 {
-		return "That's nearly 1 " + getSingularForm(itemName) + "!"
+		return prefix + "1 " + getSingularForm(itemName) + "!"
 	} else {
-		return "That's nearly " + strconv.Itoa(count) + " " + getPluralForm(itemName) + "!"
+		return prefix + strconv.Itoa(count) + " " + getPluralForm(itemName) + "!"
 	}
 }
 
@@ -92,11 +98,20 @@ func ProcessMessage(text string, pricePerItem float64) string {
 	// Sum the values
 	total := SumDollarValues(values)
 
+	// For very small amounts that don't reach 1 item
+	if total < pricePerItem {
+		// Use the standard "zero" response
+		return FormatResponse(0, "Bunnings snag", true)
+	}
+
+	// Check if the division is exact (to decide whether to use "nearly")
+	isExactDivision := (total / pricePerItem) == float64(int(total/pricePerItem))
+
 	// Calculate the item count
 	count := CalculateItemCount(total, pricePerItem)
 
 	// Format and return the response
-	return FormatResponse(count, "Bunnings snag")
+	return FormatResponse(count, "Bunnings snag", isExactDivision)
 }
 
 // getSingularForm ensures we have the singular form of the item name

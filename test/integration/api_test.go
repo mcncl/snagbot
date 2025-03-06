@@ -36,7 +36,7 @@ func TestHealthCheckEndpoint(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Check response content
-	assert.Equal(t, "Service is healthy", response.Message)
+	assert.Equal(t, "Snags are cooking 🌭", response.Message)
 	assert.Equal(t, "OK", response.Status)
 }
 

@@ -34,11 +34,20 @@ func ProcessMessageWithConfig(text string, config *models.ChannelConfig) string 
 	// Calculate total dollar amount
 	total := calculator.SumDollarValues(dollarValues)
 
+	// For very small amounts that don't reach 1 item
+	if total < config.ItemPrice {
+		// Use the standard "zero" response for small amounts
+		return calculator.FormatResponse(0, config.ItemName, true)
+	}
+
+	// Check if the division is exact (to decide whether to use "nearly")
+	isExactDivision := (total / config.ItemPrice) == float64(int(total/config.ItemPrice))
+
 	// Calculate number of items
 	count := calculator.CalculateItemCount(total, config.ItemPrice)
 
 	// Format response message
-	return calculator.FormatResponse(count, config.ItemName)
+	return calculator.FormatResponse(count, config.ItemName, isExactDivision)
 }
 
 // HandleMessageEvent processes a Slack message event using the service

@@ -175,52 +175,94 @@ func TestCalculateItemCount(t *testing.T) {
 
 func TestFormatResponse(t *testing.T) {
 	tests := []struct {
-		name     string
-		count    int
-		itemName string
-		expected string
+		name            string
+		count           int
+		itemName        string
+		isExactDivision bool
+		expected        string
 	}{
 		{
-			name:     "Zero items",
-			count:    0,
-			itemName: "Bunnings snag",
-			expected: "That wouldn't even buy a single Bunnings snag!",
+			name:            "Zero items",
+			count:           0,
+			itemName:        "Bunnings snag",
+			isExactDivision: true,
+			expected:        "That wouldn't even buy a single Bunnings snag!",
 		},
 		{
-			name:     "Single item",
-			count:    1,
-			itemName: "Bunnings snag",
-			expected: "That's nearly 1 Bunnings snag!",
+			name:            "Single item (exact)",
+			count:           1,
+			itemName:        "Bunnings snag",
+			isExactDivision: true,
+			expected:        "That's 1 Bunnings snag!",
 		},
 		{
-			name:     "Multiple items",
-			count:    10,
-			itemName: "Bunnings snag",
-			expected: "That's nearly 10 Bunnings snags!",
+			name:            "Single item (not exact)",
+			count:           1,
+			itemName:        "Bunnings snag",
+			isExactDivision: false,
+			expected:        "That's nearly 1 Bunnings snag!",
 		},
 		{
-			name:     "Already plural",
-			count:    10,
-			itemName: "Bunnings snags",
-			expected: "That's nearly 10 Bunnings snags!",
+			name:            "Multiple items (exact)",
+			count:           10,
+			itemName:        "Bunnings snag",
+			isExactDivision: true,
+			expected:        "That's 10 Bunnings snags!",
 		},
 		{
-			name:     "Custom item",
-			count:    7,
-			itemName: "coffee",
-			expected: "That's nearly 7 coffees!",
+			name:            "Multiple items (not exact)",
+			count:           10,
+			itemName:        "Bunnings snag",
+			isExactDivision: false,
+			expected:        "That's nearly 10 Bunnings snags!",
 		},
 		{
-			name:     "Custom item already plural",
-			count:    7,
-			itemName: "coffees",
-			expected: "That's nearly 7 coffees!",
+			name:            "Already plural (exact)",
+			count:           10,
+			itemName:        "Bunnings snags",
+			isExactDivision: true,
+			expected:        "That's 10 Bunnings snags!",
+		},
+		{
+			name:            "Already plural (not exact)",
+			count:           10,
+			itemName:        "Bunnings snags",
+			isExactDivision: false,
+			expected:        "That's nearly 10 Bunnings snags!",
+		},
+		{
+			name:            "Custom item (exact)",
+			count:           7,
+			itemName:        "coffee",
+			isExactDivision: true,
+			expected:        "That's 7 coffees!",
+		},
+		{
+			name:            "Custom item (not exact)",
+			count:           7,
+			itemName:        "coffee",
+			isExactDivision: false,
+			expected:        "That's nearly 7 coffees!",
+		},
+		{
+			name:            "Custom item already plural (exact)",
+			count:           7,
+			itemName:        "coffees",
+			isExactDivision: true,
+			expected:        "That's 7 coffees!",
+		},
+		{
+			name:            "Custom item already plural (not exact)",
+			count:           7,
+			itemName:        "coffees",
+			isExactDivision: false,
+			expected:        "That's nearly 7 coffees!",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := FormatResponse(test.count, test.itemName)
+			result := FormatResponse(test.count, test.itemName, test.isExactDivision)
 			assert.Equal(t, test.expected, result)
 		})
 	}
@@ -240,22 +282,46 @@ func TestProcessMessage(t *testing.T) {
 			expected:     "",
 		},
 		{
-			name:         "Single dollar value",
+			name:         "Single dollar value (exact division)",
 			text:         "This costs $35",
+			pricePerItem: 3.50,
+			expected:     "That's 10 Bunnings snags!",
+		},
+		{
+			name:         "Single dollar value (not exact division)",
+			text:         "This costs $34",
 			pricePerItem: 3.50,
 			expected:     "That's nearly 10 Bunnings snags!",
 		},
 		{
-			name:         "Multiple dollar values",
-			text:         "This costs $35 and that costs $50",
+			name:         "Multiple dollar values (exact division)",
+			text:         "This costs $35 and that costs $35",
 			pricePerItem: 3.50,
-			expected:     "That's nearly 25 Bunnings snags!",
+			expected:     "That's 20 Bunnings snags!",
 		},
 		{
-			name:         "Custom price per item",
+			name:         "Multiple dollar values (not exact division)",
+			text:         "This costs $35 and that costs $34",
+			pricePerItem: 3.50,
+			expected:     "That's nearly 20 Bunnings snags!",
+		},
+		{
+			name:         "Custom price per item (exact division)",
 			text:         "This costs $35",
 			pricePerItem: 5.00,
+			expected:     "That's 7 Bunnings snags!",
+		},
+		{
+			name:         "Custom price per item (not exact division)",
+			text:         "This costs $33",
+			pricePerItem: 5.00,
 			expected:     "That's nearly 7 Bunnings snags!",
+		},
+		{
+			name:         "Very small amount (less than one item)",
+			text:         "This costs $2",
+			pricePerItem: 3.50,
+			expected:     "That wouldn't even buy a single Bunnings snag!",
 		},
 		{
 			name:         "Zero or negative price per item",

@@ -1,6 +1,7 @@
 package command
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -17,6 +18,12 @@ func CommandHandler(cfg *config.Config) http.HandlerFunc {
 	configStore := slack.NewInMemoryConfigStoreWithConfig(cfg)
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Only allow POST requests for commands
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
 		// Verify the request is coming from Slack
 		sv, err := slackgo.NewSecretsVerifier(r.Header, cfg.SlackSigningSecret)
 		if err != nil {
@@ -62,8 +69,11 @@ func CommandHandler(cfg *config.Config) http.HandlerFunc {
 		response := ""
 		if strings.TrimSpace(strings.ToLower(text)) == "reset" {
 			response = handleResetCommand(configStore, channelID)
-		} else if strings.TrimSpace(strings.ToLower(text)) == "status" {
+		} else if strings.TrimSpace(strings.ToLower(text)) == "status" || strings.TrimSpace(text) == "" {
+			// Empty command will show status too
 			response = handleStatusCommand(configStore, channelID)
+		} else if strings.HasPrefix(strings.TrimSpace(strings.ToLower(text)), "help") {
+			response = handleHelpCommand()
 		} else {
 			response = handleConfigCommand(configStore, text, channelID)
 		}
@@ -71,7 +81,20 @@ func CommandHandler(cfg *config.Config) http.HandlerFunc {
 		// Return the response immediately with 200 OK
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(fmt.Sprintf(`{"response_type": "ephemeral", "text": %q}`, response)))
+
+		// Format the response as JSON
+		respJSON, err := json.Marshal(map[string]string{
+			"response_type": "ephemeral",
+			"text":          response,
+		})
+
+		if err != nil {
+			log.Printf("Error marshalling response: %v", err)
+			w.Write([]byte(`{"response_type": "ephemeral", "text": "Error generating response"}`))
+			return
+		}
+
+		w.Write(respJSON)
 	}
 }
 
@@ -123,4 +146,19 @@ func handleStatusCommand(store slack.ChannelConfigStore, channelID string) strin
 
 	return fmt.Sprintf("Current configuration: %s (at $%.2f each).",
 		config.ItemName, config.ItemPrice)
+}
+
+// handleHelpCommand returns help information about how to use the bot
+func handleHelpCommand() string {
+	return `*SnagBot Help*
+
+SnagBot automatically responds to messages containing dollar amounts by converting them to a fun comparison.
+
+*Available Commands:*
+• /snagbot or /snagbot status - Show current configuration
+• /snagbot item "coffee" price 5.00 - Set custom item and price
+• /snagbot reset - Reset to default configuration
+• /snagbot help - Show this help message
+
+By default, dollar amounts are converted to Bunnings snags at $3.50 each.`
 }

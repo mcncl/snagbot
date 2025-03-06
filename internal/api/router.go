@@ -26,11 +26,17 @@ func SetupSimpleRouter(cfg *config.Config) http.Handler {
 	// Hello world endpoint
 	mux.HandleFunc("/hello", helloWorldHandler)
 
+	// Debug endpoint - REMOVE IN PRODUCTION
+	mux.HandleFunc("/debug", slack.DebugHandler(cfg))
+
 	// Slack event endpoint
 	mux.HandleFunc("/api/events", slack.EventHandler(cfg))
 
 	// Slack command endpoint
 	mux.HandleFunc("/api/commands", command.CommandHandler(cfg))
+
+	// Log available routes
+	log.Printf("Available routes: /health, /hello, /debug, /api/events, /api/commands")
 
 	return mux
 }
@@ -45,7 +51,7 @@ func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	response := Response{
-		Message: "Service is healthy",
+		Message: "Snags are cooking 🌭",
 		Status:  "OK",
 	}
 

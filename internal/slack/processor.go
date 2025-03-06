@@ -30,17 +30,30 @@ func ProcessMessageEvent(ev *slackevents.MessageEvent, configStore ChannelConfig
 	// Calculate total dollar amount
 	total := calculator.SumDollarValues(dollarValues)
 
+	// For very small amounts that don't reach 1 item
+	if total < config.ItemPrice {
+		// Use the standard "zero" response
+		return api.PostMessage(SlackResponse{
+			ChannelID: ev.Channel,
+			Text:      calculator.FormatResponse(0, config.ItemName, true),
+			ThreadTS:  ev.TimeStamp,
+		})
+	}
+
+	// Check if the division is exact (to decide whether to use "nearly")
+	isExactDivision := (total / config.ItemPrice) == float64(int(total/config.ItemPrice))
+
 	// Calculate number of items
 	count := calculator.CalculateItemCount(total, config.ItemPrice)
 
 	// Format response message
-	message := calculator.FormatResponse(count, config.ItemName)
+	message := calculator.FormatResponse(count, config.ItemName, isExactDivision)
 
 	// Send response as a thread
 	response := SlackResponse{
 		ChannelID: ev.Channel,
 		Text:      message,
-		ThreadTS:  ev.TimeStamp, // Reply in thread
+		ThreadTS:  ev.TimeStamp,
 	}
 
 	return api.PostMessage(response)
