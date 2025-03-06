@@ -33,9 +33,11 @@ func ProcessMessageEvent(ev *slackevents.MessageEvent, configStore ChannelConfig
 	// For very small amounts that don't reach 1 item
 	if total < config.ItemPrice {
 		// Use the standard "zero" response
+		message := calculator.FormatResponse(0, config.ItemName, true)
+
 		return api.PostMessage(SlackResponse{
 			ChannelID: ev.Channel,
-			Text:      calculator.FormatResponse(0, config.ItemName, true),
+			Text:      message,
 			ThreadTS:  ev.TimeStamp,
 		})
 	}
