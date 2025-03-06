@@ -3,7 +3,6 @@ package integration
 import (
 	"testing"
 
-	"github.com/mcncl/snagbot/internal/config"
 	"github.com/mcncl/snagbot/internal/slack"
 	"github.com/stretchr/testify/assert"
 )
@@ -11,20 +10,15 @@ import (
 // TestChannelConfigWithMessageHandling tests the integration between channel configuration
 // and message handling logic
 func TestChannelConfigWithMessageHandling(t *testing.T) {
-	// Create the configuration
-	cfg := &config.Config{
-		DefaultItemName:  "Bunnings snags",
-		DefaultItemPrice: 3.50,
-	}
-
 	// Create the config store
 	configStore := slack.NewInMemoryConfigStore()
 
-	// Create the mock API
+	// Create the mock API and set it as global
 	mockAPI := slack.NewMockSlackAPI()
+	slack.SetGlobalMockAPI(mockAPI)
 
-	// Create the service
-	service := slack.NewSlackServiceWithDependencies(configStore, mockAPI, cfg)
+	// Set the global config store for tests
+	slack.SetGlobalConfigStore(configStore)
 
 	// Define test cases
 	tests := []struct {
@@ -111,11 +105,13 @@ func TestChannelConfigWithMessageHandling(t *testing.T) {
 
 			// Check if we should have a response
 			if test.shouldRespond {
-				assert.Len(t, mockAPI.SentMessages, 1)
-				assert.Equal(t, test.expectedMessage, mockAPI.SentMessages[0].Text)
-				assert.Equal(t, test.channelID, mockAPI.SentMessages[0].ChannelID)
+				assert.Len(t, mockAPI.SentMessages, 1, "Should have sent one message")
+				if len(mockAPI.SentMessages) > 0 {
+					assert.Equal(t, test.expectedMessage, mockAPI.SentMessages[0].Text)
+					assert.Equal(t, test.channelID, mockAPI.SentMessages[0].ChannelID)
+				}
 			} else {
-				assert.Len(t, mockAPI.SentMessages, 0)
+				assert.Len(t, mockAPI.SentMessages, 0, "Should not have sent any messages")
 			}
 		})
 	}

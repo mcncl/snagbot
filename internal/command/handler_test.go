@@ -70,7 +70,7 @@ func TestHandleConfigCommand(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Create a fresh config store for each test
-			configStore := NewInMemoryConfigStoreWithConfig(nil)
+			configStore := slack.NewInMemoryConfigStore()
 			globalConfigStore = configStore
 
 			// Process the command
@@ -123,13 +123,13 @@ func TestHandleConfigCommandWithService(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Setup test dependencies
-			configStore := slack.NewInMemoryConfigStoreWithConfig(nil)
+			configStore := slack.NewInMemoryConfigStore()
 			mockAPI := slack.NewMockSlackAPI()
 			cfg := &config.Config{
 				DefaultItemName:  "Bunnings snags",
 				DefaultItemPrice: 3.50,
 			}
-			service := slack.NewSlackService(configStore, mockAPI, cfg)
+			service := slack.NewSlackServiceWithDependencies(configStore, mockAPI, cfg)
 
 			// Process the command
 			response := handleConfigCommandWithService(test.commandText, test.channelID, service)
@@ -158,8 +158,8 @@ func TestLegacyCompatibility(t *testing.T) {
 	defer func() { globalConfigStore = originalStore }()
 
 	// Create a fresh config store
-	configStore := NewInMemoryConfigStoreWithConfig(nil)
-	globalConfigStore = configStore
+	configStore := slack.NewInMemoryConfigStore()
+	SetGlobalStore(configStore)
 
 	// Test the legacy function
 	channelID := "C12345"

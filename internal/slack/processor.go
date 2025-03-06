@@ -2,28 +2,11 @@ package slack
 
 import (
 	"github.com/mcncl/snagbot/internal/calculator"
-	"github.com/mcncl/snagbot/internal/config"
 	"github.com/slack-go/slack/slackevents"
 )
 
-// SlackService represents the main service for handling Slack interactions
-type SlackService struct {
-	ConfigStore ChannelConfigStore
-	SlackAPI    SlackAPI
-	Config      *config.Config
-}
-
-// NewSlackService creates a new SlackService
-func NewSlackService(cfg *config.Config) *SlackService {
-	return &SlackService{
-		ConfigStore: NewInMemoryConfigStoreWithConfig(cfg),
-		SlackAPI:    NewRealSlackAPI(cfg.SlackBotToken),
-		Config:      cfg,
-	}
-}
-
-// ProcessMessageEvent processes a Slack message event
-func (s *SlackService) ProcessMessageEvent(ev *slackevents.MessageEvent) error {
+// ProcessMessageEvent handles a message event from Slack
+func ProcessMessageEvent(ev *slackevents.MessageEvent, configStore ChannelConfigStore, api SlackAPI) error {
 	// Skip bot messages to prevent loops
 	if ev.BotID != "" || ev.SubType == "bot_message" {
 		return nil
@@ -35,7 +18,7 @@ func (s *SlackService) ProcessMessageEvent(ev *slackevents.MessageEvent) error {
 	}
 
 	// Get channel configuration
-	config := s.ConfigStore.GetConfig(ev.Channel)
+	config := configStore.GetConfig(ev.Channel)
 
 	// Extract dollar values from the message
 	dollarValues := calculator.ExtractDollarValues(ev.Text)
@@ -60,5 +43,5 @@ func (s *SlackService) ProcessMessageEvent(ev *slackevents.MessageEvent) error {
 		ThreadTS:  ev.TimeStamp, // Reply in thread
 	}
 
-	return s.SlackAPI.PostMessage(response)
+	return api.PostMessage(response)
 }

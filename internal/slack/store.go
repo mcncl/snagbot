@@ -148,5 +148,5 @@ func (s *InMemoryConfigStore) Count() int {
 	return len(s.configs)
 }
 
-// Global store instance for backward compatibility
-var globalConfigStore = NewInMemoryConfigStore()
+// Global store instance for backward compatibility and testing
+var globalConfigStore ChannelConfigStore = NewInMemoryConfigStore()
