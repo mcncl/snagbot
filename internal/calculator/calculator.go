@@ -69,16 +69,15 @@ func CalculateItemCount(total float64, pricePerItem float64) int {
 func FormatResponse(count int, itemName string) string {
 	// Handle zero case
 	if count <= 0 {
-		return "That wouldn't even buy a single " + itemName + "!"
+		return "That wouldn't even buy a single " + getSingularForm(itemName) + "!"
 	}
 
 	// Handle pluralization
-	item := itemName
-	if count != 1 && !strings.HasSuffix(strings.ToLower(itemName), "s") {
-		item = itemName + "s"
+	if count == 1 {
+		return "That's nearly 1 " + getSingularForm(itemName) + "!"
+	} else {
+		return "That's nearly " + strconv.Itoa(count) + " " + getPluralForm(itemName) + "!"
 	}
-
-	return "That's nearly " + strconv.Itoa(count) + " " + item + "!"
 }
 
 // ProcessMessage is a convenience function that combines all steps
@@ -98,4 +97,34 @@ func ProcessMessage(text string, pricePerItem float64) string {
 
 	// Format and return the response
 	return FormatResponse(count, "Bunnings snag")
+}
+
+// getSingularForm ensures we have the singular form of the item name
+func getSingularForm(itemName string) string {
+	// If the item name ends with 's', try to get the singular form
+	if strings.HasSuffix(strings.ToLower(itemName), "s") {
+		// Check common pluralization patterns
+		if strings.HasSuffix(strings.ToLower(itemName), "ies") {
+			// Handle words like "candies" -> "candy"
+			return itemName[:len(itemName)-3] + "y"
+		} else if strings.HasSuffix(strings.ToLower(itemName), "es") {
+			// Handle words like "watches" -> "watch"
+			return itemName[:len(itemName)-2]
+		} else {
+			// Simple case like "snags" -> "snag"
+			return itemName[:len(itemName)-1]
+		}
+	}
+	return itemName
+}
+
+// getPluralForm ensures we have the plural form of the item name
+func getPluralForm(itemName string) string {
+	// If already plural (ending with 's'), return as is
+	if strings.HasSuffix(strings.ToLower(itemName), "s") {
+		return itemName
+	}
+
+	// Add 's' for simple pluralization
+	return itemName + "s"
 }
