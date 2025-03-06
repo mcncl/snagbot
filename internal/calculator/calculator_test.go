@@ -56,7 +56,10 @@ func TestExtractDollarValues(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := ExtractDollarValues(test.text)
+			result, err := ExtractDollarValues(test.text)
+			if err != nil {
+				t.Fatal(err)
+			}
 			assert.Equal(t, test.expected, result)
 		})
 	}
@@ -102,7 +105,11 @@ func TestSumDollarValues(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := SumDollarValues(test.values)
+			result, err := SumDollarValues(test.values)
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			assert.Equal(t, test.expected, result)
 		})
 	}
@@ -167,7 +174,10 @@ func TestCalculateItemCount(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := CalculateItemCount(test.total, test.pricePerItem)
+			result, err := CalculateItemCount(test.total, test.pricePerItem)
+			if err != nil {
+				t.Fatal(err)
+			}
 			assert.Equal(t, test.expected, result)
 		})
 	}
@@ -333,7 +343,11 @@ func TestProcessMessage(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := ProcessMessage(test.text, test.pricePerItem)
+			result, err := ProcessMessage(test.text, test.pricePerItem)
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			assert.Equal(t, test.expected, result)
 		})
 	}

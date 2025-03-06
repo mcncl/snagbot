@@ -83,7 +83,8 @@ func TestHandleConfigCommand(t *testing.T) {
 				assert.Contains(t, response, "at $")
 
 				// Verify the channel config was updated correctly
-				config := configStore.GetConfig(test.channelID)
+				config, err := configStore.GetConfig(test.channelID)
+				assert.NoError(t, err)
 				assert.Equal(t, test.expectedItemName, config.ItemName)
 				assert.Equal(t, test.expectedItemPrice, config.ItemPrice)
 			} else {

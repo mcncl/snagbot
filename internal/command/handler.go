@@ -3,11 +3,13 @@ package command
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"io"
 	"net/http"
 	"strings"
 
 	"github.com/mcncl/snagbot/internal/config"
+	"github.com/mcncl/snagbot/internal/errors"
+	"github.com/mcncl/snagbot/internal/logging"
 	slack "github.com/mcncl/snagbot/internal/slack"
 	slackgo "github.com/slack-go/slack"
 )
@@ -20,31 +22,32 @@ func CommandHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Only allow POST requests for commands
 		if r.Method != http.MethodPost {
+			logging.Warn("Method not allowed for command: %s", r.Method)
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		// Verify the request is coming from Slack
-		sv, err := slackgo.NewSecretsVerifier(r.Header, cfg.SlackSigningSecret)
+		// Check if Slack signing secret is configured
+		if cfg.SlackSigningSecret == "" {
+			logging.Error("Slack signing secret not configured")
+			http.Error(w, "Server configuration error", http.StatusInternalServerError)
+			return
+		}
+
+		// Read and verify the request from Slack
+		_, err := verifySlackRequest(r, cfg.SlackSigningSecret)
 		if err != nil {
-			log.Printf("Error creating secrets verifier: %v", err)
-			http.Error(w, "Error verifying request", http.StatusBadRequest)
+			appErr := errors.Wrap(err, "Failed to verify Slack request")
+			logging.Error("Slack verification error: %v", appErr)
+			http.Error(w, "Invalid request", http.StatusUnauthorized)
 			return
 		}
 
 		// Parse the form to get command data
 		err = r.ParseForm()
 		if err != nil {
-			log.Printf("Error parsing form: %v", err)
-			http.Error(w, "Error parsing request", http.StatusBadRequest)
-			return
-		}
-
-		// Add the form values to the signature verification
-		sv.Write([]byte(r.Form.Encode()))
-		if err := sv.Ensure(); err != nil {
-			log.Printf("Error verifying signature: %v", err)
-			http.Error(w, "Invalid request signature", http.StatusUnauthorized)
+			appErr := errors.WrapAndLog(err, "Error parsing form")
+			http.Error(w, appErr.Message, http.StatusBadRequest)
 			return
 		}
 
@@ -53,29 +56,41 @@ func CommandHandler(cfg *config.Config) http.HandlerFunc {
 		text := r.Form.Get("text")
 		channelID := r.Form.Get("channel_id")
 		userID := r.Form.Get("user_id")
+		userName := r.Form.Get("user_name")
 
 		// Log the command
-		log.Printf("Received command %s with text '%s' from user %s in channel %s",
-			command, text, userID, channelID)
+		logging.Info("Received command %s with text '%s' from user %s (%s) in channel %s",
+			command, text, userName, userID, channelID)
 
 		// Only process /snagbot command
 		if command != "/snagbot" {
-			log.Printf("Received unknown command: %s", command)
+			logging.Warn("Received unknown command: %s", command)
 			http.Error(w, "Unknown command", http.StatusBadRequest)
 			return
 		}
 
-		// Handle different subcommands
+		// Handle different subcommands with error handling
 		response := ""
-		if strings.TrimSpace(strings.ToLower(text)) == "reset" {
-			response = handleResetCommand(configStore, channelID)
-		} else if strings.TrimSpace(strings.ToLower(text)) == "status" || strings.TrimSpace(text) == "" {
+		var cmdErr error
+
+		trimmedText := strings.TrimSpace(strings.ToLower(text))
+		switch {
+		case trimmedText == "reset":
+			response, cmdErr = safeHandleResetCommand(configStore, channelID)
+		case trimmedText == "status" || trimmedText == "":
 			// Empty command will show status too
-			response = handleStatusCommand(configStore, channelID)
-		} else if strings.HasPrefix(strings.TrimSpace(strings.ToLower(text)), "help") {
+			response, cmdErr = safeHandleStatusCommand(configStore, channelID)
+		case strings.HasPrefix(trimmedText, "help"):
 			response = handleHelpCommand()
-		} else {
-			response = handleConfigCommand(configStore, text, channelID)
+		default:
+			response, cmdErr = safeHandleConfigCommand(configStore, text, channelID)
+		}
+
+		// If there was an error, include a user-friendly error message
+		if cmdErr != nil {
+			logging.Error("Error handling command: %v", cmdErr)
+			response = fmt.Sprintf("Error: %s\n\nTry `/snagbot help` for usage information.",
+				errors.UserFriendlyError(cmdErr))
 		}
 
 		// Return the response immediately with 200 OK
@@ -89,7 +104,7 @@ func CommandHandler(cfg *config.Config) http.HandlerFunc {
 		})
 
 		if err != nil {
-			log.Printf("Error marshalling response: %v", err)
+			logging.Error("Error marshalling response: %v", err)
 			w.Write([]byte(`{"response_type": "ephemeral", "text": "Error generating response"}`))
 			return
 		}
@@ -98,54 +113,90 @@ func CommandHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-// handleConfigCommand processes the command text and updates the channel configuration
-func handleConfigCommand(store slack.ChannelConfigStore, text, channelID string) string {
+// verifySlackRequest verifies that a request is coming from Slack
+// Returns the request body if verification succeeds, or an error if it fails
+func verifySlackRequest(r *http.Request, signingSecret string) ([]byte, error) {
+	// Verify that the request is coming from Slack
+	sv, err := slackgo.NewSecretsVerifier(r.Header, signingSecret)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create secrets verifier")
+	}
+
+	// Read the body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to read request body")
+	}
+
+	// Replace the body for later use (since ReadAll depletes it)
+	r.Body = io.NopCloser(strings.NewReader(string(body)))
+
+	// Add the body to the signature verification
+	sv.Write(body)
+	if err := sv.Ensure(); err != nil {
+		return nil, errors.Wrap(err, "Failed to verify Slack signature")
+	}
+
+	return body, nil
+}
+
+// safeHandleConfigCommand processes the command text and updates the channel configuration
+// with error handling
+func safeHandleConfigCommand(store slack.ChannelConfigStore, text, channelID string) (string, error) {
 	// Parse the command
 	result, err := ParseConfigCommand(text)
 	if err != nil {
-		log.Printf("Error parsing command: %v", err)
-		return FormatCommandErrorResponse(err)
+		return "", errors.Wrap(err, "Failed to parse command")
 	}
 
 	// Update the channel configuration
 	err = store.UpdateConfig(channelID, result.ItemName, result.ItemPrice)
 	if err != nil {
-		log.Printf("Error updating channel config: %v", err)
-		return fmt.Sprintf("Error updating configuration: %v", err)
+		return "", errors.Wrap(err, "Failed to update configuration")
 	}
 
 	// Return success message
-	return FormatCommandResponse(result)
+	return FormatCommandResponse(result), nil
 }
 
-// handleResetCommand resets a channel's configuration to the default
-func handleResetCommand(store slack.ChannelConfigStore, channelID string) string {
+// safeHandleResetCommand resets a channel's configuration to the default with error handling
+func safeHandleResetCommand(store slack.ChannelConfigStore, channelID string) (string, error) {
 	// Reset the config
 	err := store.ResetConfig(channelID)
 	if err != nil {
-		log.Printf("Error resetting channel config: %v", err)
-		return fmt.Sprintf("Error resetting configuration: %v", err)
+		return "", errors.Wrap(err, "Failed to reset configuration")
 	}
 
 	// Get default config after reset
-	defaultConfig := store.GetConfig(channelID)
-
-	return fmt.Sprintf("Configuration has been reset! Now using the default item: %s (at $%.2f each).",
-		defaultConfig.ItemName, defaultConfig.ItemPrice)
-}
-
-// handleStatusCommand returns the current configuration for a channel
-func handleStatusCommand(store slack.ChannelConfigStore, channelID string) string {
-	config := store.GetConfig(channelID)
-
-	// Check if this is a custom or default config
-	if checker, ok := store.(slack.ConfigExistsChecker); ok && !checker.ConfigExists(channelID) {
-		return fmt.Sprintf("This channel is using the default configuration: %s (at $%.2f each).",
-			config.ItemName, config.ItemPrice)
+	config, err := store.GetConfig(channelID)
+	if err != nil {
+		return "", errors.Wrap(err, "Failed to get default configuration")
 	}
 
-	return fmt.Sprintf("Current configuration: %s (at $%.2f each).",
-		config.ItemName, config.ItemPrice)
+	return fmt.Sprintf("Configuration has been reset! Now using the default item: %s (at $%.2f each).",
+		config.ItemName, config.ItemPrice), nil
+}
+
+// safeHandleStatusCommand returns the current configuration for a channel with error handling
+func safeHandleStatusCommand(store slack.ChannelConfigStore, channelID string) (string, error) {
+	config, err := store.GetConfig(channelID)
+	if err != nil {
+		return "", errors.Wrap(err, "Failed to get configuration")
+	}
+
+	// Check if this is a custom or default config
+	isCustom := false
+	if checker, ok := store.(slack.ConfigExistsChecker); ok {
+		isCustom = checker.ConfigExists(channelID)
+	}
+
+	if isCustom {
+		return fmt.Sprintf("Current configuration: %s (at $%.2f each).",
+			config.ItemName, config.ItemPrice), nil
+	} else {
+		return fmt.Sprintf("This channel is using the default configuration: %s (at $%.2f each).",
+			config.ItemName, config.ItemPrice), nil
+	}
 }
 
 // handleHelpCommand returns help information about how to use the bot

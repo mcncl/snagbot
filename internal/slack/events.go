@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/mcncl/snagbot/internal/config"
+	"github.com/mcncl/snagbot/internal/errors"
+	"github.com/mcncl/snagbot/internal/logging"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 )
@@ -26,6 +27,8 @@ func min(x, y int) int {
 func DebugHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Only use this endpoint for debugging and remove before production!
+		logging.Warn("Debug endpoint accessed - THIS SHOULD BE DISABLED IN PRODUCTION")
+
 		w.Header().Set("Content-Type", "application/json")
 
 		// Don't show the full secrets, just their length and first few characters
@@ -57,7 +60,11 @@ func DebugHandler(cfg *config.Config) http.HandlerFunc {
 			"environmentSource": "Go environment",
 		}
 
-		json.NewEncoder(w).Encode(debug)
+		if err := json.NewEncoder(w).Encode(debug); err != nil {
+			logging.Error("Failed to encode debug response: %v", err)
+			http.Error(w, "Error generating debug information", http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
@@ -72,39 +79,54 @@ func EventHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Only allow POST requests for events
 		if r.Method != http.MethodPost {
+			logging.Warn("Method not allowed: %s", r.Method)
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			log.Printf("Error reading request body: %v", err)
-			http.Error(w, "Error reading request body", http.StatusBadRequest)
+		// Check if the Slack signing secret is configured
+		if cfg.SlackSigningSecret == "" {
+			logging.Error("Slack signing secret not configured")
+			http.Error(w, "Server configuration error", http.StatusInternalServerError)
 			return
 		}
 
-		// Verify Slack signature with additional debugging
-		log.Printf("DEBUG: Verifying Slack signature with secret of length: %d", len(cfg.SlackSigningSecret))
-		log.Printf("DEBUG: Request timestamp: %s", r.Header.Get("X-Slack-Request-Timestamp"))
-		log.Printf("DEBUG: Request signature: %s", r.Header.Get("X-Slack-Signature"))
+		// Read request body
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			appErr := errors.WrapAndLog(err, "Error reading request body")
+			http.Error(w, appErr.Message, http.StatusBadRequest)
+			return
+		}
 
+		// Verify Slack signature
+		logging.Debug("Verifying Slack signature with secret of length: %d", len(cfg.SlackSigningSecret))
 		sv, err := slack.NewSecretsVerifier(r.Header, cfg.SlackSigningSecret)
 		if err != nil {
-			log.Printf("Error creating secrets verifier: %v", err)
-			http.Error(w, "Error verifying request", http.StatusBadRequest)
+			appErr := errors.WrapAndLog(err, "Error creating secrets verifier")
+			http.Error(w, appErr.Message, http.StatusBadRequest)
 			return
 		}
 
 		if _, err := sv.Write(body); err != nil {
-			log.Printf("Error writing to verifier: %v", err)
-			http.Error(w, "Error verifying request", http.StatusBadRequest)
+			appErr := errors.WrapAndLog(err, "Error writing to verifier")
+			http.Error(w, appErr.Message, http.StatusBadRequest)
 			return
 		}
 
 		if err := sv.Ensure(); err != nil {
-			log.Printf("Error verifying signature: %v", err)
-			log.Printf("DEBUG: Body length: %d bytes", len(body))
-			log.Printf("DEBUG: First few bytes of body: %v", body[:min(len(body), 20)])
+			// Handle signature validation error
+			logging.Error("Signature verification failed: %v", err)
+			logging.Debug("Request headers: %v", r.Header)
+			logging.Debug("Body length: %d bytes", len(body))
+
+			// Don't log the entire body as it may contain sensitive information
+			if len(body) > 0 {
+				// Log just the first few bytes for debugging
+				maxBytes := min(len(body), 20)
+				logging.Debug("First %d bytes of body: %v", maxBytes, body[:maxBytes])
+			}
+
 			http.Error(w, "Invalid request signature", http.StatusUnauthorized)
 			return
 		}
@@ -112,21 +134,23 @@ func EventHandler(cfg *config.Config) http.HandlerFunc {
 		// Parse the event
 		eventsAPIEvent, err := slackevents.ParseEvent(json.RawMessage(body), slackevents.OptionNoVerifyToken())
 		if err != nil {
-			log.Printf("Error parsing event: %v", err)
-			http.Error(w, "Error parsing event", http.StatusBadRequest)
+			appErr := errors.WrapAndLog(err, "Error parsing Slack event")
+			http.Error(w, appErr.Message, http.StatusBadRequest)
 			return
 		}
 
 		// Handle URL verification (required by Slack when setting up Events API)
 		if eventsAPIEvent.Type == slackevents.URLVerification {
+			logging.Info("Handling URL verification challenge from Slack")
 			var r *slackevents.ChallengeResponse
 			if err := json.Unmarshal(body, &r); err != nil {
-				log.Printf("Error unmarshalling challenge: %v", err)
-				http.Error(w, "Error parsing challenge", http.StatusInternalServerError)
+				appErr := errors.WrapAndLog(err, "Error unmarshalling challenge")
+				http.Error(w, appErr.Message, http.StatusInternalServerError)
 				return
 			}
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte(r.Challenge))
+			logging.Info("Successfully responded to URL verification challenge")
 			return
 		}
 
@@ -136,30 +160,70 @@ func EventHandler(cfg *config.Config) http.HandlerFunc {
 			// This is important to do quickly, before any processing
 			w.WriteHeader(http.StatusOK)
 
+			// Log the event type received
+			if innerEvent := eventsAPIEvent.InnerEvent; innerEvent.Data != nil {
+				logging.Info("Received Slack callback event: %T", innerEvent.Data)
+			}
+
 			// Process the event in a goroutine to avoid blocking
-			go handleCallbackEvent(eventsAPIEvent, configStore, api)
+			go func() {
+				defer func() {
+					// Recover from any panics in the goroutine to prevent crashing
+					if r := recover(); r != nil {
+						logging.Error("Panic in event handler: %v", r)
+					}
+				}()
+
+				if err := handleCallbackEvent(eventsAPIEvent, configStore, api); err != nil {
+					logging.Error("Error handling callback event: %v", err)
+				}
+			}()
 			return
 		}
 
 		// If we reach here, it's an unknown event type
-		log.Printf("Unknown event type: %s", eventsAPIEvent.Type)
+		logging.Warn("Unknown event type: %s", eventsAPIEvent.Type)
 		http.Error(w, "Unknown event type", http.StatusBadRequest)
 	}
 }
 
 // handleCallbackEvent processes Slack callback events
-func handleCallbackEvent(event slackevents.EventsAPIEvent, configStore ChannelConfigStore, api SlackAPI) {
+func handleCallbackEvent(event slackevents.EventsAPIEvent, configStore ChannelConfigStore, api SlackAPI) error {
 	innerEvent := event.InnerEvent
 
 	// Check if it's a message event
 	switch ev := innerEvent.Data.(type) {
 	case *slackevents.MessageEvent:
 		// Process the message
-		err := ProcessMessageEvent(ev, configStore, api)
-		if err != nil {
-			log.Printf("Error processing message event: %v", err)
-		}
+		return ProcessMessageEvent(ev, configStore, api)
 	default:
-		log.Printf("Unhandled event type: %T", innerEvent.Data)
+		eventType := fmt.Sprintf("%T", innerEvent.Data)
+		logging.Debug("Unhandled event type: %s", eventType)
+		return errors.Newf(errors.ErrInvalidRequest, "unhandled event type: %s", eventType)
+	}
+}
+
+// HandleErrorWithResponse sends an error message to the user via Slack
+func HandleErrorWithResponse(err error, ev *slackevents.MessageEvent, api SlackAPI) {
+	// Don't send any message for nil errors
+	if err == nil {
+		return
+	}
+
+	// Create a user-friendly error message
+	message := "Oops! Something went wrong. I couldn't process that message properly."
+
+	// Log the error
+	logging.Error("Error processing message: %v", err)
+
+	// Send the error message as a thread reply
+	response := SlackResponse{
+		ChannelID: ev.Channel,
+		Text:      message,
+		ThreadTS:  ev.TimeStamp,
+	}
+
+	if err := api.PostMessage(response); err != nil {
+		logging.Error("Failed to send error response to Slack: %v", err)
 	}
 }
