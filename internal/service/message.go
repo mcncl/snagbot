@@ -1,7 +1,8 @@
-package slack
+package service
 
 import (
 	"github.com/mcncl/snagbot/internal/calculator"
+	"github.com/mcncl/snagbot/internal/slack"
 	"github.com/mcncl/snagbot/pkg/models"
 	"github.com/slack-go/slack/slackevents"
 )
@@ -71,7 +72,7 @@ type MockMessageEvent struct {
 }
 
 // HandleMockMessageEvent handles a mock message event for testing
-func (s *SlackService) HandleMockMessageEvent(event *MockMessageEvent) error {
+func (s *slack.SlackService) HandleMockMessageEvent(event *MockMessageEvent) error {
 	// Skip bot messages to prevent loops
 	if event.BotID != "" || event.SubType == "bot_message" {
 		return nil

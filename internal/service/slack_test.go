@@ -1,4 +1,4 @@
-package simulation
+package service_test
 
 import (
 	"testing"

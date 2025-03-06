@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/mcncl/snagbot/internal/config"
+	"github.com/mcncl/snagbot/internal/service"
 	"github.com/slack-go/slack"
 )
 
@@ -62,13 +63,13 @@ func (m *MockSlackAPI) PostMessage(response SlackResponse) error {
 
 // SlackService represents a service for handling Slack events
 type SlackService struct {
-	configStore ChannelConfigStore
+	configStore service.ChannelConfigStore
 	slackAPI    SlackAPI
 	cfg         *config.Config
 }
 
 // NewSlackService creates a new Slack service
-func NewSlackService(configStore ChannelConfigStore, slackAPI SlackAPI, cfg *config.Config) *SlackService {
+func NewSlackService(configStore service.ChannelConfigStore, slackAPI SlackAPI, cfg *config.Config) *SlackService {
 	return &SlackService{
 		configStore: configStore,
 		slackAPI:    slackAPI,
