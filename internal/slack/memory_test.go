@@ -165,7 +165,6 @@ func TestInMemoryConfigStore_ResetConfig(t *testing.T) {
 	assert.Equal(t, testCfg.DefaultItemPrice, config.ItemPrice)
 
 	// Verify the config is no longer stored
-	// Use type assertion properly - the store already is an InMemoryConfigStore
 	assert.False(t, store.ConfigExists(channelID))
 }
 
@@ -190,50 +189,4 @@ func TestInMemoryConfigStore_ConfigExists(t *testing.T) {
 
 	// Now it doesn't exist again
 	assert.False(t, store.ConfigExists(channelID))
-}
-
-func TestCommandHandler_ResetCommand(t *testing.T) {
-	// Create a test config store - use the new function
-	store := NewInMemoryConfigStoreWithConfig(nil)
-	channelID := "C12345"
-
-	// Set up an initial configuration
-	err := store.UpdateConfig(channelID, "coffee", 5.00)
-	assert.NoError(t, err)
-
-	// Verify initial config
-	config := store.GetConfig(channelID)
-	assert.Equal(t, "coffee", config.ItemName)
-
-	// Test reset command
-	response := handleResetCommand(store, channelID)
-
-	// Verify the response
-	assert.Contains(t, response, "Configuration has been reset")
-
-	// Verify config was reset
-	config = store.GetConfig(channelID)
-	assert.Equal(t, "Bunnings snags", config.ItemName) // Default value
-	assert.Equal(t, 3.50, config.ItemPrice)            // Default value
-}
-
-func TestCommandHandler_StatusCommand(t *testing.T) {
-	// Create a test config store - use the new function
-	store := NewInMemoryConfigStoreWithConfig(nil)
-	channelID := "C12345"
-
-	// Test status command with default configuration
-	response := handleStatusCommand(store, channelID)
-	assert.Contains(t, response, "default configuration")
-	assert.Contains(t, response, "Bunnings snags")
-
-	// Set up a custom configuration
-	err := store.UpdateConfig(channelID, "coffee", 5.00)
-	assert.NoError(t, err)
-
-	// Test status command with custom configuration
-	response = handleStatusCommand(store, channelID)
-	assert.Contains(t, response, "Current configuration")
-	assert.Contains(t, response, "coffee")
-	assert.Contains(t, response, "$5.00")
 }

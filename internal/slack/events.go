@@ -98,21 +98,3 @@ func handleCallbackEventWithStore(event slackevents.EventsAPIEvent, configStore 
 		}
 	}
 }
-
-// Backward compatibility function for the old event handling process
-func handleCallbackEvent(event slackevents.EventsAPIEvent, cfg *config.Config) {
-	innerEvent := event.InnerEvent
-
-	// Check if it's a message event
-	switch ev := innerEvent.Data.(type) {
-	case *slackevents.MessageEvent:
-		// Create the API client
-		api := NewRealSlackAPI(cfg.SlackBotToken)
-
-		// Process the message
-		err := ProcessMessageEvent(ev, globalConfigStore, api)
-		if err != nil {
-			log.Printf("Error processing message event: %v", err)
-		}
-	}
-}

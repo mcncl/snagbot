@@ -8,24 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// MockSlackAPI provides a mock implementation for testing
-type MockSlackAPI struct {
-	SentMessages []slack.SlackResponse
-}
-
-// NewMockSlackAPI creates a new mock Slack API
-func NewMockSlackAPI() *MockSlackAPI {
-	return &MockSlackAPI{
-		SentMessages: make([]slack.SlackResponse, 0),
-	}
-}
-
-// PostMessage simulates posting a message to Slack
-func (m *MockSlackAPI) PostMessage(response slack.SlackResponse) error {
-	m.SentMessages = append(m.SentMessages, response)
-	return nil
-}
-
 // TestChannelConfigWithMessageHandling tests the integration between channel configuration
 // and message handling logic
 func TestChannelConfigWithMessageHandling(t *testing.T) {
@@ -39,12 +21,12 @@ func TestChannelConfigWithMessageHandling(t *testing.T) {
 	configStore := slack.NewInMemoryConfigStore()
 
 	// Create the mock API
-	mockAPI := NewMockSlackAPI()
+	mockAPI := slack.NewMockSlackAPI()
 
 	// Create the service
-	service := slack.NewSlackService(configStore, mockAPI, cfg)
+	service := slack.NewSlackServiceWithDependencies(configStore, mockAPI, cfg)
 
-	// Test cases for different channel configurations and messages
+	// Define test cases
 	tests := []struct {
 		name            string
 		channelID       string
@@ -124,7 +106,7 @@ func TestChannelConfigWithMessageHandling(t *testing.T) {
 			}
 
 			// Handle the message event
-			err := service.HandleMockMessageEvent(event)
+			err := slack.HandleMockMessageEvent(event)
 			assert.NoError(t, err)
 
 			// Check if we should have a response

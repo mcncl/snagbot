@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/mcncl/snagbot/internal/command"
 	"github.com/mcncl/snagbot/internal/config"
 	"github.com/mcncl/snagbot/internal/slack"
 )
@@ -29,7 +30,7 @@ func SetupSimpleRouter(cfg *config.Config) http.Handler {
 	mux.HandleFunc("/api/events", slack.EventHandler(cfg))
 
 	// Slack command endpoint
-	mux.HandleFunc("/api/commands", slack.CommandHandler(cfg))
+	mux.HandleFunc("/api/commands", command.CommandHandler(cfg))
 
 	return mux
 }

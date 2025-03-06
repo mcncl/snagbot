@@ -14,10 +14,6 @@ type ChannelConfigStore interface {
 	GetConfig(channelID string) *models.ChannelConfig
 	UpdateConfig(channelID, itemName string, itemPrice float64) error
 	ResetConfig(channelID string) error
-}
-
-// ConfigExistsChecker is an additional interface for checking if configs exist
-type ConfigExistsChecker interface {
 	ConfigExists(channelID string) bool
 }
 
@@ -152,11 +148,5 @@ func (s *InMemoryConfigStore) Count() int {
 	return len(s.configs)
 }
 
-// UpdateChannelConfig provides backward compatibility with existing code
-// It uses the instance variable pattern that was in the original code
+// Global store instance for backward compatibility
 var globalConfigStore = NewInMemoryConfigStore()
-
-// UpdateChannelConfig is the compatibility function for existing code
-func UpdateGlobalChannelConfig(channelID, itemName string, itemPrice float64) error {
-	return globalConfigStore.UpdateConfig(channelID, itemName, itemPrice)
-}

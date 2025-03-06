@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/mcncl/snagbot/internal/config"
+	"github.com/mcncl/snagbot/internal/slack"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -122,13 +123,13 @@ func TestHandleConfigCommandWithService(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Setup test dependencies
-			configStore := NewInMemoryConfigStoreWithConfig(nil)
-			mockAPI := NewMockSlackAPI()
+			configStore := slack.NewInMemoryConfigStoreWithConfig(nil)
+			mockAPI := slack.NewMockSlackAPI()
 			cfg := &config.Config{
 				DefaultItemName:  "Bunnings snags",
 				DefaultItemPrice: 3.50,
 			}
-			service := NewSlackService(configStore, mockAPI, cfg)
+			service := slack.NewSlackService(configStore, mockAPI, cfg)
 
 			// Process the command
 			response := handleConfigCommandWithService(test.commandText, test.channelID, service)

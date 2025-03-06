@@ -3,12 +3,10 @@ package slack
 import (
 	"log"
 
-	"github.com/mcncl/snagbot/internal/config"
-	"github.com/mcncl/snagbot/internal/service"
 	"github.com/slack-go/slack"
 )
 
-// SlackResponse representation for unified interface
+// SlackResponse represents a response to be sent to Slack
 type SlackResponse struct {
 	ChannelID string
 	Text      string
@@ -57,22 +55,6 @@ func NewMockSlackAPI() *MockSlackAPI {
 // PostMessage simulates posting a message to Slack
 func (m *MockSlackAPI) PostMessage(response SlackResponse) error {
 	m.SentMessages = append(m.SentMessages, response)
-	log.Printf("Message sent to channel %s: %s", response.ChannelID, response.Text)
+	log.Printf("Mock: Message sent to channel %s: %s", response.ChannelID, response.Text)
 	return nil
-}
-
-// SlackService represents a service for handling Slack events
-type SlackService struct {
-	configStore service.ChannelConfigStore
-	slackAPI    SlackAPI
-	cfg         *config.Config
-}
-
-// NewSlackService creates a new Slack service
-func NewSlackService(configStore service.ChannelConfigStore, slackAPI SlackAPI, cfg *config.Config) *SlackService {
-	return &SlackService{
-		configStore: configStore,
-		slackAPI:    slackAPI,
-		cfg:         cfg,
-	}
 }
