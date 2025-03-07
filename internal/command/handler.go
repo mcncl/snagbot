@@ -14,10 +14,24 @@ import (
 	slackgo "github.com/slack-go/slack"
 )
 
+// Global store for backward compatibility
+// This is needed for some tests but should be phased out in favor of dependency injection
+// TODO: Remove this global variable and update tests to use dependency injection
+var globalConfigStore slack.ChannelConfigStore
+
+// SetGlobalStore sets the global store for tests
+// DEPRECATED: Tests should be updated to use dependency injection instead
+func SetGlobalStore(store slack.ChannelConfigStore) {
+	globalConfigStore = store
+}
+
 // CommandHandler creates a handler for Slack slash commands
 func CommandHandler(cfg *config.Config) http.HandlerFunc {
 	// Create a single instance of the config store for all requests
 	configStore := slack.NewInMemoryConfigStoreWithConfig(cfg)
+
+	// Set the global store for backward compatibility
+	globalConfigStore = configStore
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Only allow POST requests for commands
@@ -212,4 +226,25 @@ SnagBot automatically responds to messages containing dollar amounts by converti
 • /snagbot help - Show this help message
 
 By default, dollar amounts are converted to Bunnings snags at $3.50 each.`
+}
+
+// handleConfigCommandWithService processes a configuration command with the specified service
+// This function is used by tests and addresses the missing function issue
+func handleConfigCommandWithService(text, channelID string, service *slack.SlackService) string {
+	// Parse the command
+	result, err := ParseConfigCommand(text)
+	if err != nil {
+		logging.Error("Error parsing command: %v", err)
+		return FormatCommandErrorResponse(err)
+	}
+
+	// Update the channel configuration
+	err = service.ConfigStore.UpdateConfig(channelID, result.ItemName, result.ItemPrice)
+	if err != nil {
+		logging.Error("Error updating channel config: %v", err)
+		return fmt.Sprintf("Error updating configuration: %v", err)
+	}
+
+	// Return success message
+	return FormatCommandResponse(result)
 }

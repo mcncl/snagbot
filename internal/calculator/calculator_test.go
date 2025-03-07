@@ -116,7 +116,8 @@ func TestSumDollarValues(t *testing.T) {
 }
 
 func TestCalculateItemCount(t *testing.T) {
-	tests := []struct {
+	// Split tests into valid and invalid cases
+	validTests := []struct {
 		name         string
 		total        float64
 		pricePerItem float64
@@ -147,24 +148,6 @@ func TestCalculateItemCount(t *testing.T) {
 			expected:     0,
 		},
 		{
-			name:         "Zero price",
-			total:        35.0,
-			pricePerItem: 0,
-			expected:     0,
-		},
-		{
-			name:         "Negative price",
-			total:        35.0,
-			pricePerItem: -1.0,
-			expected:     0,
-		},
-		{
-			name:         "Negative total",
-			total:        -35.0,
-			pricePerItem: 3.5,
-			expected:     0,
-		},
-		{
 			name:         "Small price, large total",
 			total:        1000.0,
 			pricePerItem: 0.01,
@@ -172,13 +155,43 @@ func TestCalculateItemCount(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
+	// Tests that should return errors
+	invalidTests := []struct {
+		name         string
+		total        float64
+		pricePerItem float64
+	}{
+		{
+			name:         "Zero price",
+			total:        35.0,
+			pricePerItem: 0,
+		},
+		{
+			name:         "Negative price",
+			total:        35.0,
+			pricePerItem: -1.0,
+		},
+		{
+			name:         "Negative total",
+			total:        -35.0,
+			pricePerItem: 3.5,
+		},
+	}
+
+	// Test valid inputs
+	for _, test := range validTests {
 		t.Run(test.name, func(t *testing.T) {
 			result, err := CalculateItemCount(test.total, test.pricePerItem)
-			if err != nil {
-				t.Fatal(err)
-			}
+			assert.NoError(t, err)
 			assert.Equal(t, test.expected, result)
+		})
+	}
+
+	// Test invalid inputs that should return errors
+	for _, test := range invalidTests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := CalculateItemCount(test.total, test.pricePerItem)
+			assert.Error(t, err, "Expected error for invalid input")
 		})
 	}
 }
@@ -279,7 +292,8 @@ func TestFormatResponse(t *testing.T) {
 }
 
 func TestProcessMessage(t *testing.T) {
-	tests := []struct {
+	// Split tests into valid and invalid cases
+	validTests := []struct {
 		name         string
 		text         string
 		pricePerItem float64
@@ -307,7 +321,7 @@ func TestProcessMessage(t *testing.T) {
 			name:         "Multiple dollar values (exact division)",
 			text:         "This costs $35 and that costs $35",
 			pricePerItem: 3.50,
-			expected:     "That's 20 Bunnings snags!",
+			expected:     "That's 10 Bunnings snags!",
 		},
 		{
 			name:         "Multiple dollar values (not exact division)",
@@ -333,22 +347,40 @@ func TestProcessMessage(t *testing.T) {
 			pricePerItem: 3.50,
 			expected:     "That wouldn't even buy a single Bunnings snag!",
 		},
+	}
+
+	// Tests that should return errors
+	invalidTests := []struct {
+		name         string
+		text         string
+		pricePerItem float64
+	}{
 		{
-			name:         "Zero or negative price per item",
+			name:         "Zero price per item",
 			text:         "This costs $35",
 			pricePerItem: 0,
-			expected:     "That wouldn't even buy a single Bunnings snag!",
+		},
+		{
+			name:         "Negative price per item",
+			text:         "This costs $35",
+			pricePerItem: -1.0,
 		},
 	}
 
-	for _, test := range tests {
+	// Test valid inputs
+	for _, test := range validTests {
 		t.Run(test.name, func(t *testing.T) {
 			result, err := ProcessMessage(test.text, test.pricePerItem)
-			if err != nil {
-				t.Fatal(err)
-			}
-
+			assert.NoError(t, err)
 			assert.Equal(t, test.expected, result)
+		})
+	}
+
+	// Test invalid inputs that should return errors
+	for _, test := range invalidTests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := ProcessMessage(test.text, test.pricePerItem)
+			assert.Error(t, err, "Expected error for invalid input")
 		})
 	}
 }

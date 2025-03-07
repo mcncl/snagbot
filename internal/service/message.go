@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/mcncl/snagbot/internal/calculator"
+	"github.com/mcncl/snagbot/internal/logging"
 	"github.com/mcncl/snagbot/internal/slack"
 	"github.com/mcncl/snagbot/pkg/models"
 	"github.com/slack-go/slack/slackevents"
@@ -24,30 +25,8 @@ func NewSlackService(store slack.ChannelConfigStore, api slack.SlackAPI) *SlackS
 // ProcessMessageWithConfig processes a message with the given channel configuration
 // and returns the formatted response string
 func ProcessMessageWithConfig(text string, config *models.ChannelConfig) string {
-	// Extract dollar values from the message
-	dollarValues := calculator.ExtractDollarValues(text)
-	if len(dollarValues) == 0 {
-		// No dollar values found, nothing to do
-		return ""
-	}
-
-	// Calculate total dollar amount
-	total := calculator.SumDollarValues(dollarValues)
-
-	// For very small amounts that don't reach 1 item
-	if total < config.ItemPrice {
-		// Use the standard "zero" response for small amounts
-		return calculator.FormatResponse(0, config.ItemName, true)
-	}
-
-	// Check if the division is exact (to decide whether to use "nearly")
-	isExactDivision := (total / config.ItemPrice) == float64(int(total/config.ItemPrice))
-
-	// Calculate number of items
-	count := calculator.CalculateItemCount(total, config.ItemPrice)
-
-	// Format response message
-	return calculator.FormatResponse(count, config.ItemName, isExactDivision)
+	// Use the shared implementation from calculator package
+	return calculator.ProcessMessageWithConfig(text, config)
 }
 
 // HandleMessageEvent processes a Slack message event using the service
@@ -63,7 +42,11 @@ func (s *SlackService) HandleMessageEvent(ev *slackevents.MessageEvent) error {
 	}
 
 	// Get channel configuration
-	config := s.ChannelConfigStore.GetConfig(ev.Channel)
+	config, err := s.ChannelConfigStore.GetConfig(ev.Channel)
+	if err != nil {
+		logging.Error("Config retrieval error: %v", err)
+		return err
+	}
 
 	// Process the message
 	message := ProcessMessageWithConfig(ev.Text, config)

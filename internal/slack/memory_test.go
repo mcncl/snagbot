@@ -56,7 +56,10 @@ func TestInMemoryConfigStore_GetConfig(t *testing.T) {
 			}
 
 			// Get config
-			result := store.GetConfig(test.channelID)
+			result, err := store.GetConfig(test.channelID)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			// Verify result
 			assert.Equal(t, test.expected.ChannelID, result.ChannelID)
@@ -126,7 +129,10 @@ func TestInMemoryConfigStore_UpdateConfig(t *testing.T) {
 				assert.NoError(t, err)
 
 				// Verify the update was successful
-				config := store.GetConfig(test.channelID)
+				config, err := store.GetConfig(test.channelID)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
 				assert.Equal(t, test.channelID, config.ChannelID)
 				assert.Equal(t, test.itemName, config.ItemName)
 				assert.Equal(t, test.itemPrice, config.ItemPrice)
@@ -151,7 +157,10 @@ func TestInMemoryConfigStore_ResetConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify initial config
-	config := store.GetConfig(channelID)
+	config, err := store.GetConfig(channelID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	assert.Equal(t, "coffee", config.ItemName)
 	assert.Equal(t, 5.00, config.ItemPrice)
 
@@ -160,7 +169,10 @@ func TestInMemoryConfigStore_ResetConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify config has been reset
-	config = store.GetConfig(channelID)
+	config, err = store.GetConfig(channelID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	assert.Equal(t, testCfg.DefaultItemName, config.ItemName)
 	assert.Equal(t, testCfg.DefaultItemPrice, config.ItemPrice)
 

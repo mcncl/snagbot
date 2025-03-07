@@ -140,7 +140,11 @@ func TestHandleConfigCommandWithService(t *testing.T) {
 				assert.Contains(t, response, "Configuration updated!")
 
 				// Verify the channel config was updated correctly
-				config := configStore.GetConfig(test.channelID)
+				config, err := configStore.GetConfig(test.channelID)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+
 				assert.Equal(t, test.expectedItemName, config.ItemName)
 				assert.Equal(t, test.expectedItemPrice, config.ItemPrice)
 			} else {
@@ -149,31 +153,4 @@ func TestHandleConfigCommandWithService(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestLegacyCompatibility tests the backward compatibility functions
-func TestLegacyCompatibility(t *testing.T) {
-	// Store the original channelConfigs map
-	originalStore := globalConfigStore
-	// Restore it after the test
-	defer func() { globalConfigStore = originalStore }()
-
-	// Create a fresh config store
-	configStore := slack.NewInMemoryConfigStore()
-	SetGlobalStore(configStore)
-
-	// Test the legacy function
-	channelID := "C12345"
-	commandText := "item \"coffee\" price 5.00"
-
-	response := handleConfigCommandLegacy(commandText, channelID)
-
-	// Verify the response
-	assert.Contains(t, response, "Configuration updated!")
-	assert.Contains(t, response, "coffee")
-
-	// Verify the config was updated
-	config := configStore.GetConfig(channelID)
-	assert.Equal(t, "coffee", config.ItemName)
-	assert.Equal(t, 5.00, config.ItemPrice)
 }

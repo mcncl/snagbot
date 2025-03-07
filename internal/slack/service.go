@@ -3,6 +3,7 @@ package slack
 import (
 	"github.com/mcncl/snagbot/internal/calculator"
 	"github.com/mcncl/snagbot/internal/config"
+	"github.com/mcncl/snagbot/internal/logging"
 	"github.com/slack-go/slack/slackevents"
 )
 
@@ -35,38 +36,19 @@ func (s *SlackService) ProcessMessageEvent(ev *slackevents.MessageEvent) error {
 	}
 
 	// Get channel configuration
-	config := s.ConfigStore.GetConfig(ev.Channel)
+	config, err := s.ConfigStore.GetConfig(ev.Channel)
+	if err != nil {
+		logging.Error("Failed to get channel configuration: %v", err)
+		return err
+	}
 
-	// Extract dollar values from the message
-	dollarValues := calculator.ExtractDollarValues(ev.Text)
-	if len(dollarValues) == 0 {
-		// No dollar values found, nothing to do
+	// Process the message using the shared utility function
+	message := calculator.ProcessMessageWithConfig(ev.Text, config)
+
+	// If no message was generated, no dollar values were found
+	if message == "" {
 		return nil
 	}
-
-	// Calculate total dollar amount
-	total := calculator.SumDollarValues(dollarValues)
-
-	// For very small amounts that don't reach 1 item
-	if total < config.ItemPrice {
-		// Use the standard "zero" response for small amounts
-		message := calculator.FormatResponse(0, config.ItemName, true)
-
-		return s.SlackAPI.PostMessage(SlackResponse{
-			ChannelID: ev.Channel,
-			Text:      message,
-			ThreadTS:  ev.TimeStamp,
-		})
-	}
-
-	// Check if the division is exact
-	isExactDivision := (total / config.ItemPrice) == float64(int(total/config.ItemPrice))
-
-	// Calculate number of items
-	count := calculator.CalculateItemCount(total, config.ItemPrice)
-
-	// Format response message
-	message := calculator.FormatResponse(count, config.ItemName, isExactDivision)
 
 	// Send response as a thread
 	response := SlackResponse{

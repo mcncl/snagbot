@@ -8,6 +8,7 @@ import (
 
 	"github.com/mcncl/snagbot/internal/errors"
 	"github.com/mcncl/snagbot/internal/logging"
+	"github.com/mcncl/snagbot/pkg/models"
 )
 
 // ExtractDollarValues extracts all dollar values from a string
@@ -161,6 +162,9 @@ func ProcessMessage(text string, pricePerItem float64) (string, error) {
 		return "", errors.WrapAndLog(err, "Failed to sum dollar values")
 	}
 
+	// Log the extracted values and total for debugging
+	logging.Debug("Processing message with values: %v, total: %.2f", values, total)
+
 	// For very small amounts that don't reach 1 item
 	if total < pricePerItem {
 		// Use the standard "zero" response
@@ -180,6 +184,49 @@ func ProcessMessage(text string, pricePerItem float64) (string, error) {
 	response := FormatResponse(count, "Bunnings snag", isExactDivision)
 	logging.Debug("Processed message: Total $%.2f, Count %d, Response: %s", total, count, response)
 	return response, nil
+}
+
+// ProcessMessageWithConfig is a shared utility that processes a message with the given channel configuration
+// and returns the formatted response string
+// This function centralizes the logic from both service/message.go and slack/service.go
+func ProcessMessageWithConfig(text string, config *models.ChannelConfig) string {
+	// Extract dollar values from the message
+	dollarValues, err := ExtractDollarValues(text)
+	if err != nil {
+		logging.Error("Failed to extract dollar values: %v", err)
+		return ""
+	}
+	if len(dollarValues) == 0 {
+		// No dollar values found, nothing to do
+		logging.Debug("No dollar values found in text")
+		return ""
+	}
+
+	// Calculate total dollar amount
+	total, err := SumDollarValues(dollarValues)
+	if err != nil {
+		logging.Error("Failed to sum dollar values: %v", err)
+		return ""
+	}
+
+	// For very small amounts that don't reach 1 item
+	if total < config.ItemPrice {
+		// Use the standard "zero" response for small amounts
+		return FormatResponse(0, config.ItemName, true)
+	}
+
+	// Check if the division is exact (to decide whether to use "nearly")
+	isExactDivision := IsExactDivision(total, config.ItemPrice)
+
+	// Calculate number of items
+	count, err := CalculateItemCount(total, config.ItemPrice)
+	if err != nil {
+		logging.Error("Failed to calculate item count: %v", err)
+		return ""
+	}
+
+	// Format response message
+	return FormatResponse(count, config.ItemName, isExactDivision)
 }
 
 // getSingularForm ensures we have the singular form of the item name
