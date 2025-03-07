@@ -23,7 +23,7 @@ func NewSlackService(cfg *config.Config) *SlackService {
 	var configStore ChannelConfigStore
 	var tokenStore TokenStore
 	var slackAPI SlackAPI
-	
+
 	// Setup Redis client if configured
 	var redisClient *redis.Client
 	if cfg.UseRedis {
@@ -42,7 +42,7 @@ func NewSlackService(cfg *config.Config) *SlackService {
 			}
 		}
 	}
-	
+
 	// Configure config store
 	if redisClient != nil {
 		// Use Redis store when Redis is available
@@ -58,7 +58,7 @@ func NewSlackService(cfg *config.Config) *SlackService {
 		configStore = NewInMemoryConfigStoreWithConfig(cfg)
 		logging.Info("Using in-memory config store")
 	}
-	
+
 	// Configure token store and API client based on multi-workspace setting
 	if cfg.EnableMultiWorkspace && redisClient != nil {
 		tokenStore = NewRedisTokenStore(redisClient)
@@ -69,7 +69,7 @@ func NewSlackService(cfg *config.Config) *SlackService {
 		slackAPI = NewRealSlackAPI(cfg.SlackBotToken)
 		logging.Info("Single-workspace mode enabled")
 	}
-	
+
 	return &SlackService{
 		ConfigStore: configStore,
 		TokenStore:  tokenStore,
@@ -107,10 +107,11 @@ func (s *SlackService) ProcessMessageEvent(ev *slackevents.MessageEvent) error {
 
 	// Send response as a thread
 	response := SlackResponse{
-		WorkspaceID: ev.TeamID, // Include workspace ID for multi-workspace support
-		ChannelID:   ev.Channel,
-		Text:        message,
-		ThreadTS:    ev.TimeStamp, // Reply in thread
+		// MessageEvent doesn't have WorkspaceID field, only use TeamID
+		TeamID:    ev.SourceTeam, // Using SourceTeam as TeamID
+		ChannelID: ev.Channel,
+		Text:      message,
+		ThreadTS:  ev.TimeStamp,
 	}
 
 	return s.SlackAPI.PostMessage(response)

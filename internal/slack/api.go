@@ -13,6 +13,7 @@ import (
 // SlackResponse represents a response to be sent to Slack
 type SlackResponse struct {
 	WorkspaceID string // Optional for multi-workspace support
+	TeamID      string // Optional for multi-team support
 	ChannelID   string
 	Text        string
 	ThreadTS    string
@@ -99,10 +100,15 @@ func (s *RealSlackAPI) PostMessage(response SlackResponse) error {
 	var err error
 
 	// For multi-workspace support
-	if s.tokenStore != nil && response.WorkspaceID != "" {
-		client, err = s.GetClientForWorkspace(response.WorkspaceID)
+	if s.tokenStore != nil && (response.WorkspaceID != "" || response.TeamID != "") {
+		// Prefer WorkspaceID, but fall back to TeamID if WorkspaceID is not available
+		workspaceID := response.WorkspaceID
+		if workspaceID == "" {
+			workspaceID = response.TeamID
+		}
+		client, err = s.GetClientForWorkspace(workspaceID)
 		if err != nil {
-			logging.Error("Failed to get client for workspace %s: %v", response.WorkspaceID, err)
+			logging.Error("Failed to get client for workspace %s: %v", workspaceID, err)
 			return err
 		}
 	} else {
