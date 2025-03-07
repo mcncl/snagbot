@@ -1,0 +1,59 @@
+{
+    "display_information": {
+        "name": "SnagBot",
+        "description": "SnagBot converts dollar amounts into equivalent items (like Bunnings Snags).",
+        "background_color": "#28a745",
+        "long_description": "SnagBot is a fun Slack bot that converts dollar amounts mentioned in chat to equivalent items. For example, when someone mentions \"$15\" in chat, SnagBot might respond \"That's nearly 5 Bunnings Snags!\"\n\nYou can customize the item and price for each channel using a simple command: `/snagbot item \"Coffee\" price 4.50`\n\nPerfect for putting prices into perspective and adding a bit of fun to your workspace."
+    },
+    "features": {
+        "app_home": {
+            "home_tab_enabled": false,
+            "messages_tab_enabled": true,
+            "messages_tab_read_only_enabled": false
+        },
+        "bot_user": {
+            "display_name": "SnagBot",
+            "always_online": false
+        },
+        "slash_commands": [
+            {
+                "command": "/snagbot",
+                "description": "Configure SnagBot for this channel",
+                "usage_hint": "item \"Coffee\" price 4.50",
+                "should_escape": false
+            }
+        ]
+    },
+    "oauth_config": {
+        "redirect_urls": [
+            "https://YOUR_DOMAIN_HERE/api/oauth/callback"
+        ],
+        "scopes": {
+            "bot": [
+                "app_mentions:read",
+                "channels:history",
+                "chat:write",
+                "commands",
+                "groups:history",
+                "im:history",
+                "mpim:history"
+            ]
+        }
+    },
+    "settings": {
+        "event_subscriptions": {
+            "request_url": "https://YOUR_DOMAIN_HERE/api/events",
+            "bot_events": [
+                "app_mention",
+                "message.channels",
+                "message.groups"
+            ]
+        },
+        "interactivity": {
+            "is_enabled": false
+        },
+        "org_deploy_enabled": false,
+        "socket_mode_enabled": false,
+        "token_rotation_enabled": true
+    }
+}
