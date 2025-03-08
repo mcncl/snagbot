@@ -1,10 +1,10 @@
-# Slack Bot Specification: “SnagBot”
+# Slack Bot Specification: "SnagBot"
 
 ## 1. Overview
 
-The Slack bot (hereafter “SnagBot”) is designed to automatically monitor messages in Slack channels where it is added. When a user mentions one or more dollar values (e.g., “We think this would cost $35”), the bot will reply in a thread with a fun conversion message. By default, the conversion is based on the cost of a Bunnings snag ($3.50 each). The bot sums any dollar amounts found in a message, calculates the number of snags by dividing the total by $3.50, rounds the result up, and responds with a message such as “That’s nearly 10 Bunnings snags!”
+The Slack bot (hereafter "SnagBot") is designed to automatically monitor messages in Slack channels where it is added. When a user mentions one or more dollar values (e.g., "We think this would cost $35"), the bot will reply in a thread with a fun conversion message. By default, the conversion is based on the cost of a Bunnings snag ($3.50 each). The bot sums any dollar amounts found in a message, calculates the number of snags by dividing the total by $3.50, rounds the result up, and responds with a message such as "That's nearly 10 Bunnings snags!"
 
-Additionally, the bot will support configuration commands via Slack so that users can set a custom item and price (e.g., “coffee at $5.00”) on a per-channel basis. If no custom item is set, Bunnings snags remain the default.
+Additionally, the bot will support configuration commands via Slack so that users can set a custom item and price (e.g., "coffee at $5.00") on a per-channel basis. If no custom item is set, Bunnings snags remain the default.
 
 ---
 
@@ -16,16 +16,16 @@ Additionally, the bot will support configuration commands via Slack so that user
 - **Dollar Value Detection:**  
   - The bot will scan each message for any mention of dollar values. This can be achieved using a regular expression (e.g., matching `\$[0-9]+(\.[0-9]{1,2})?`).
 - **Multiple Dollar Values:**  
-  - If a message includes multiple dollar values (e.g., “$35 for project A and $50 for project B”), the bot must total these amounts and use that sum for conversion.
+  - If a message includes multiple dollar values (e.g., "$35 for project A and $50 for project B"), the bot must total these amounts and use that sum for conversion.
 - **Conversion Calculation:**  
   - Use the configured cost per item. By default, this is $3.50 (Bunnings snag).
-  - Calculate the number of items by dividing the total dollar amount by the item’s price.
-  - **Rounding:** Always round up the result and include a qualifier such as “nearly” or “about” in the response.
+  - Calculate the number of items by dividing the total dollar amount by the item's price.
+  - **Rounding:** Always round up the result and include a qualifier such as "nearly" or "about" in the response.
 - **Response Format:**  
   - The bot will reply in a threaded message.
   - The reply is a simple, fun message in the format:  
-    “That’s nearly X [item]!”  
-    where X is the rounded-up number and [item] is either “Bunnings snags” (default) or the custom item configured for the channel.
+    "That's nearly X [item]!"  
+    where X is the rounded-up number and [item] is either "Bunnings snags" (default) or the custom item configured for the channel.
 
 ### 2.2 Handling Message Edits
 - **Message Update (Optional):**  
@@ -45,7 +45,7 @@ Additionally, the bot will support configuration commands via Slack so that user
     - The price is provided in a valid numeric format (e.g., 5.00).
   - If validation fails, the bot should respond with an error message explaining the correct syntax.
 - **Fallback:**  
-  - If no custom configuration is set for a channel, the default “Bunnings snags” at $3.50 remains in use.
+  - If no custom configuration is set for a channel, the default "Bunnings snags" at $3.50 remains in use.
 
 ---
 
@@ -76,17 +76,17 @@ Additionally, the bot will support configuration commands via Slack so that user
   - Parse and validate input from the configuration command.
 - **Data Storage:**  
   - **In-Memory Storage:** Suitable for testing and small deployments.
-  - **Database:** For production, use a persistent store (e.g., Redis, PostgreSQL) keyed by channel ID to store each channel’s configuration.
+  - **Database:** For production, use a persistent store (e.g., Redis, PostgreSQL) keyed by channel ID to store each channel's configuration.
 - **Default Fallback:**  
-  - If no configuration is found for a channel, automatically use “Bunnings snags” at $3.50.
+  - If no configuration is found for a channel, automatically use "Bunnings snags" at $3.50.
 
 ---
 
 ## 4. Data Handling & Storage
 
 - **Channel Configuration Data:**  
-  - Each channel’s configuration includes:
-    - `item_name` (string, e.g., “Bunnings snags” or “coffee”)
+  - Each channel's configuration includes:
+    - `item_name` (string, e.g., "Bunnings snags" or "coffee")
     - `price_per_item` (numeric, e.g., 3.50 or 5.00)
 - **Storage Options:**
   - **In-Memory Cache:** For quick prototyping.
@@ -116,7 +116,7 @@ Additionally, the bot will support configuration commands via Slack so that user
 
 ### 6.1 Unit Testing
 - **Dollar Value Extraction:**  
-  - Test regular expression parsing for various formats (e.g., “$35”, “$35.00”, multiple values in one message).
+  - Test regular expression parsing for various formats (e.g., "$35", "$35.00", multiple values in one message).
 - **Calculation Logic:**  
   - Verify that the conversion calculation correctly sums values and rounds up.
 - **Configuration Command Parsing:**  
@@ -130,7 +130,7 @@ Additionally, the bot will support configuration commands via Slack so that user
 - **Slash Command Testing:**  
   - Simulate sending configuration commands and verify that the channel configuration is updated correctly.
 - **Threaded Reply Verification:**  
-  - Ensure the bot’s replies appear in the correct message thread.
+  - Ensure the bot's replies appear in the correct message thread.
 
 ### 6.3 Error Case Testing
 - **Malformed Input:**  
@@ -142,30 +142,29 @@ Additionally, the bot will support configuration commands via Slack so that user
 
 ## 7. Developer Implementation Roadmap
 
-1. **Slack App Setup:**
+1. **Slack App Setup:** ✅
    - Create a Slack App and set up event subscriptions for messages and message edits.
    - Set up slash command endpoints for configuration commands.
 
-2. **Core Functionality:**
+2. **Core Functionality:** ✅
    - Implement the message parser to detect dollar values.
    - Code the conversion logic (summing values, division, and rounding up).
    - Implement the threaded reply functionality.
 
-3. **Configuration Module:**
+3. **Configuration Module:** ✅
    - Develop the command parser for `/snagbot set item "..." price ...`.
    - Implement per-channel configuration storage (initially in-memory, then integrate with a database if required).
 
-4. **Error Handling & Logging:**
+4. **Error Handling & Logging:** ✅
    - Integrate comprehensive error handling for message processing, API calls, and configuration parsing.
    - Set up logging for debugging and production monitoring.
 
-5. **Testing & QA:**
+5. **Testing & QA:** ✅
    - Write and run unit tests.
-   - Conduct integration testing with Slack’s API.
+   - Conduct integration testing with Slack's API.
    - Gather user feedback in a staging channel before full deployment.
 
 6. **Deployment & Monitoring:**
    - Deploy the bot to production.
    - Monitor performance and error logs.
    - Roll out additional features (e.g., automatic updates on message edits) as needed.
-
